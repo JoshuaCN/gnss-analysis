@@ -33,15 +33,27 @@ function gnssMeas = ProcessGnssMeas(gnssRaw)
 
 % Filter valid values first, so that rollover checks, etc, are on valid data
 gnssRaw = FilterValid(gnssRaw);
+gnssMeas.Svid       = unique(gnssRaw.Svid)'; %all the sv ids found in gnssRaw
+M = length(gnssMeas.Svid);
 
 %anything within 1ms is considered same epoch:
 allRxMilliseconds = double(gnssRaw.allRxMillis);
-gnssMeas.FctSeconds = (unique(allRxMilliseconds))*1e-3;
-N = length(gnssMeas.FctSeconds);
+allRxMilliseconds(gnssRaw.ConstellationType==5) = allRxMilliseconds(gnssRaw.ConstellationType==5) - 1356000*GpsConstants.WEEKSEC;
+if(sum(gnssRaw.ConstellationType==5)~=0)
+    gnssMeas.FctSeconds(:,1) = (unique(allRxMilliseconds(gnssRaw.ConstellationType==5)))*1e-3+1356*GpsConstants.WEEKSEC;
+    gnssMeas.FctSeconds(:,2) = gnssMeas.FctSeconds(:,1)-1356*GpsConstants.WEEKSEC;
+end
+
+if(sum(gnssRaw.ConstellationType==1)~=0)
+    gnssMeas.FctSeconds(:,1) = (unique(allRxMilliseconds(gnssRaw.ConstellationType==1)))*1e-3;
+    gnssMeas.FctSeconds(:,2) = gnssMeas.FctSeconds(:,1)-1356*GpsConstants.WEEKSEC;
+end
+
+
+N = size(gnssMeas.FctSeconds,1);
 gnssMeas.ClkDCount  = zeros(N,1);
 gnssMeas.HwDscDelS  = zeros(N,1);
-gnssMeas.Svid       = unique(gnssRaw.Svid)'; %all the sv ids found in gnssRaw
-M = length(gnssMeas.Svid);
+
 gnssMeas.AzDeg      = zeros(1,M)+NaN;
 gnssMeas.ElDeg      = zeros(1,M)+NaN;
 gnssMeas.tRxSeconds = zeros(N,M)+NaN; %time of reception, seconds of gps week
@@ -88,6 +100,7 @@ assert(all(tRxNanos >= 0),'tRxNanos should be >= 0')
 
 %subtract the fractional offsets TimeOffsetNanos and BiasNanos:
 tRxSeconds  = (double(tRxNanos)-gnssRaw.TimeOffsetNanos-gnssRaw.BiasNanos)*1e-9;
+tRxSeconds(gnssRaw.ConstellationType==5) = tRxSeconds(gnssRaw.ConstellationType==5)-14;
 tTxSeconds  = double(gnssRaw.ReceivedSvTimeNanos)*1e-9;
 
 %check for week rollover in tRxSeconds
@@ -107,7 +120,8 @@ Cn0DbHz     = gnssRaw.Cn0DbHz;
 %Now pack these vectors into the NxM matrices
 for i=1:N %i is index into gnssMeas.FctSeconds and matrix rows
     %get index of measurements within 1ms of this time tag
-    J = find(abs(gnssMeas.FctSeconds(i)*1e3 - allRxMilliseconds)<1); 
+    J = find(abs(gnssMeas.FctSeconds(i,:)*1e3 - allRxMilliseconds)<1);
+    J(J>length(allRxMilliseconds)) = J(J>length(allRxMilliseconds)) - length(allRxMilliseconds);
     for j=1:length(J) %J(j) is index into gnssRaw.*
         k = find(gnssMeas.Svid==gnssRaw.Svid(J(j)));
         %k is the index into gnssMeas.Svid and matrix columns

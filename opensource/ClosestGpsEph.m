@@ -27,7 +27,7 @@ for i=1:length(svIds)
         fctToe = [ephThisSv.GPS_Week]*GpsConstants.WEEKSEC + [ephThisSv.Toe];
         %find freshest Toe
         [ageSeconds, iMin] = min(abs(fctToe - fctSeconds));
-        if ageSeconds < (fitIntervalHours/2)*3600;
+        if ageSeconds < (fitIntervalHours/2)*3600*100;
             numEph = numEph+1;
             gpsEph(numEph) = ephThisSv(iMin);
             iSv(numEph) = i;%save index into svIds

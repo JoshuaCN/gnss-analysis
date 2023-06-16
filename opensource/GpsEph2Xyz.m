@@ -30,7 +30,7 @@ xyzM=[]; dtsvS=[];
 if ~bOk
     return
 end
-p=length(gpsEph);
+p=length([gpsEph.PRN]);
 %Now we are done checking and manipulating the inputs
 % the time vectors: gpsWeek, ttxSec are the same length as gpsEph
 %-------------------------------------------------------------------------------
@@ -131,6 +131,20 @@ cos_ik=cos(ik);
 xyzM(:,1)=xkp.*cos_Wk-ykp.*cos_ik.*sin_Wk;
 xyzM(:,2)=xkp.*sin_Wk+ykp.*cos_ik.*cos_Wk;
 xyzM(:,3)=ykp.*sin_ik;                                       
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+geoSv = [1,2,3,4,5,59,60,61,62] + 100;
+geoId = ismember([gpsEph.PRN],geoSv);
+Wk = OMEGA + OMEGA_DOT.*tk - GpsConstants.WE*[gpsEph.Toe]';
+xgk = xkp.*cos(Wk) - ykp.*cos(ik).*sin(Wk);
+ygk = xkp.*sin(Wk) + ykp.*cos(ik).*cos(Wk);
+zgk = ykp.*sin(ik);
+xk = cos(GpsConstants.WE*tk).*xgk+sin(GpsConstants.WE*tk)*cos(-5/180*pi).*ygk+sin(GpsConstants.WE*tk)*sin(-5/180*pi).*zgk;
+yk = -sin(GpsConstants.WE*tk).*xgk+cos(GpsConstants.WE*tk)*cos(-5/180*pi).*ygk+cos(GpsConstants.WE*tk)*sin(-5/180*pi).*zgk;
+zk = -sin(-5/180*pi)*ygk+cos(-5/180*pi)*zgk;
+geoXyzM = [xk,yk,zk];
+xyzM(geoId,:) = geoXyzM(geoId,:);
 
 end %end of function GpsEph2Xyz
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

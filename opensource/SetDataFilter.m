@@ -29,11 +29,15 @@ dataFilter{1,2}   = 'FullBiasNanos ~= 0';
 
 %keep only Svid 2
 % dataFilter{end+1,1} = 'Svid'; 
-% dataFilter{end,2}   = 'Svid==2';
+% dataFilter{end,2}   = 'ismember(Svid,[10    12    15    23   32])';
 
 %limit to GPS only:
 dataFilter{end+1,1} = 'ConstellationType'; 
-dataFilter{end,2}   = 'ConstellationType==1'; 
+dataFilter{end,2}   = 'ismember(ConstellationType,[1])'; 
+
+dataFilter{end+1,1} = 'Cn0DbHz'; 
+dataFilter{end,2}   = 'Cn0DbHz>20'; 
+
 %ConstellationType values are defined in Android HAL Documentation, gps.h, 
 %   typedef uint8_t                         GnssConstellationType;
 %   #define GNSS_CONSTELLATION_UNKNOWN      0

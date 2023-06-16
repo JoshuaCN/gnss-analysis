@@ -29,7 +29,7 @@ if min(size(tS))>1
 end
 tS=tS(:)';%make t a row vector, to match [gpsEph.*] vectors below
 pt=length(tS);
-[p]=length(gpsEph);
+[p]=length([gpsEph.PRN]);
 if (p>1 && pt~=p), 
   error('If gpsEph is a vector tS must be a vector with #rows = length(gpsEph),\n')
 end

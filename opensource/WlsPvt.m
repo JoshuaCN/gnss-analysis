@@ -39,7 +39,7 @@ end
 xHat=[]; z=[]; H=[]; svPos=[];
 xyz0 = xo(1:3);
 bc = xo(4);
-
+bcBtwSys = xo(5);
 if numVal<4
   return
 end
@@ -64,16 +64,16 @@ Wpr = diag(1./prs(:,jPrSig));
 Wrr = diag(1./prs(:,jPrrSig));
 
 %iterate on this next part tilL change in pos & line of sight vectors converge
-xHat=zeros(4,1);
+xHat=zeros(5,1);
 dx=xHat+inf;
 whileCount=0; maxWhileCount=100; 
 %we expect the while loop to converge in < 10 iterations, even with initial
 %position on other side of the Earth (see Stanford course AA272C "Intro to GPS")
-while norm(dx) > GnssThresholds.MAXDELPOSFORNAVM
+while norm(dx(1:4)) > GnssThresholds.MAXDELPOSFORNAVM
     whileCount=whileCount+1;
     assert(whileCount < maxWhileCount,...
         'while loop did not converge after %d iterations',whileCount);
-    for i=1:length(gpsEph)
+    for i=1:length([gpsEph.PRN])
         % calculate tflight from, bc and dtsv
         dtflight = (prs(i,jPr)-bc)/GpsConstants.LIGHTSPEED + dtsv(i);
         % Use of bc: bc>0 <=> pr too big <=> tflight too big.
@@ -96,7 +96,9 @@ while norm(dx) > GnssThresholds.MAXDELPOSFORNAVM
   % Use of dtsv: dtsv>0 <=> pr too small
     
   zPr = prs(:,jPr)-prHat; 
-  H = [v', ones(numVal,1)]; % H matrix = [unit vector,1]
+  zeroOneVec = zeros(numVal,1);
+  zeroOneVec(prs(:,jSv)>100) = 1;
+  H = [v', ones(numVal,1), zeroOneVec]; % H matrix = [unit vector,1]
   
   %z = Hx, premultiply by W: Wz = WHx, and solve for x:
   dx = pinv(Wpr*H)*Wpr*zPr;
@@ -105,7 +107,7 @@ while norm(dx) > GnssThresholds.MAXDELPOSFORNAVM
   xHat=xHat+dx;
   xyz0=xyz0(:)+dx(1:3);
   bc=bc+dx(4);
-
+  bcBtwSys = bcBtwSys+dx(5);
   %Now calculate the a-posteriori range residual
   zPr = zPr-H*dx;
 end
@@ -116,7 +118,7 @@ for i=1:numVal
     %range rate = [satellite velocity] dot product [los from xo to sv]
     rrMps(i) = -svXyzDot(i,:)*v(:,i);
 end
-prrHat = rrMps + xo(8) - GpsConstants.LIGHTSPEED*dtsvDot;
+prrHat = rrMps + xo(9) - GpsConstants.LIGHTSPEED*dtsvDot;
 zPrr = prs(:,jPrr)-prrHat;
 %z = Hx, premultiply by W: Wz = WHx, and solve for x:
 vHat = pinv(Wrr*H)*Wrr*zPrr;
@@ -132,7 +134,7 @@ function [bOk,numVal] = checkInputs(prs, gpsEph, xo)
 %utility function for WlsPvt
 jWk=1; jSec=2; jSv=3; jPr=4; jPrSig=5; jPrr=6; jPrrSig=7;%index of columns
 
-bOk=false;
+bOk=true;
 %check inputs
 numVal=size(prs,1);  
 if (max(prs(:,jSec))-min(prs(:,jSec)))> eps

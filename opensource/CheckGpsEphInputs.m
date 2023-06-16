@@ -10,7 +10,7 @@ if ~isstruct(gpsEph)
     error('gpsEph input must be a structure, as defined by ReadRinexNav')
 end
 
-p=length(gpsEph);
+p=length([gpsEph.PRN]);
 %Check that gpsTime is a px2 vector
 if any(size(gpsTime) ~= [p 2])
     error('gpsTime must be px2 [gpsWeek, gpsSec], where p =length(gpsEph)')

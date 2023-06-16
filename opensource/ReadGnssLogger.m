@@ -168,7 +168,7 @@ while ischar(line)
    line = fgetl(txtfileID);
    if line == -1
      break
-   endif
+   end
    if isempty(strfind(line,'Raw,'))
        continue %skip to next line
    end
