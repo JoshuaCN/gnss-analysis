@@ -1,28 +1,58 @@
 function gnssMeas = PseudorangeSmoother(gnssMeas)
+clkDcount = find(diff(gnssMeas.ClkDCount)~=0);
+segId = [0;clkDcount;length(gnssMeas.ClkDCount)];
+for nSeg=1:length(segId)-1
+    rawPr = gnssMeas.PrM(segId(nSeg)+1:segId(nSeg+1),:);
+    smPr = rawPr;
+    prSigma = gnssMeas.PrSigmaM(segId(nSeg)+1:segId(nSeg+1),:);
+    prr = gnssMeas.PrrMps(segId(nSeg)+1:segId(nSeg+1),:);
+    prrSigma = gnssMeas.PrrSigmaMps(segId(nSeg)+1:segId(nSeg+1),:);
+    trxSec = gnssMeas.tRxSeconds(segId(nSeg)+1:segId(nSeg+1),:);
+    n = size(rawPr,2);
+    for nSv=1:n
+        rawPr_nSv = rmmissing(rawPr(:,nSv));
+        prSigma_nSv = rmmissing(prSigma(:,nSv));
+        prr_nSv = rmmissing(prr(:,nSv));
+        prrSigma_nSv = rmmissing(prrSigma(:,nSv));
+        deltaT = diff(rmmissing(trxSec(:,nSv)));
 
-rawPr = gnssMeas.PrM;
-smPr = rawPr;
-prSigma = gnssMeas.PrSigmaM;
-prr = gnssMeas.PrrMps;
-prrSigma = gnssMeas.PrrSigmaMps;
-n = size(rawPr,2);
-for nSv=1:n
-    rawPr_nSv = rmmissing(rawPr(:,nSv));
-    prSigma_nSv = rmmissing(prSigma(:,nSv));
-    prr_nSv = rmmissing(prr(:,nSv));
-    prrSigma_nSv = rmmissing(prrSigma(:,nSv));
-    deltaT = diff(rmmissing(gnssMeas.tRxSeconds(:,nSv)));
+        m = length(rawPr_nSv);
+        I = eye(m);
+        D = ([zeros(m-1,1),eye(m-1)]-[eye(m-1),zeros(m-1,1)])./deltaT;
+        A = [I;D];
 
-    m = length(rawPr_nSv);
-    I = eye(m);
-    D = ([zeros(m-1,1),eye(m-1)]-[eye(m-1),zeros(m-1,1)])./deltaT;
-    A = [I;D];
-
-    y = [rawPr_nSv;prr_nSv(2:end)];
-    W = diag(1./[prSigma_nSv;prrSigma_nSv(2:end)]);
-    smPr(~isnan(smPr(:,nSv)),nSv) = pinv(W*A)*W*y; 
+        y = [rawPr_nSv;prr_nSv(2:end)];
+        W = diag(1./[prSigma_nSv;prrSigma_nSv(2:end)]);
+        smPr(~isnan(smPr(:,nSv)),nSv) = pinv(W*A)*W*y; 
+    end
+    gnssMeas.PrM(segId(nSeg)+1:segId(nSeg+1),:) = smPr;
 end
-gnssMeas.PrM = smPr;
+
+% function gnssMeas = PseudorangeSmoother(gnssMeas)
+% 
+% rawPr = gnssMeas.PrM;
+% smPr = rawPr;
+% prSigma = gnssMeas.PrSigmaM;
+% prr = gnssMeas.PrrMps;
+% prrSigma = gnssMeas.PrrSigmaMps;
+% n = size(rawPr,2);
+% for nSv=1:n
+%     rawPr_nSv = rmmissing(rawPr(:,nSv));
+%     prSigma_nSv = rmmissing(prSigma(:,nSv));
+%     prr_nSv = rmmissing(prr(:,nSv));
+%     prrSigma_nSv = rmmissing(prrSigma(:,nSv));
+%     deltaT = diff(rmmissing(gnssMeas.tRxSeconds(:,nSv)));
+% 
+%     m = length(rawPr_nSv);
+%     I = eye(m);
+%     D = ([zeros(m-1,1),eye(m-1)]-[eye(m-1),zeros(m-1,1)])./deltaT;
+%     A = [I;D];
+% 
+%     y = [rawPr_nSv;prr_nSv(2:end)];
+%     W = diag(1./[prSigma_nSv;prrSigma_nSv(2:end)]);
+%     smPr(~isnan(smPr(:,nSv)),nSv) = pinv(W*A)*W*y; 
+% end
+% gnssMeas.PrM = smPr;
 
 % function gnssMeas = PseudorangeSmoother(gnssMeas)
 % 

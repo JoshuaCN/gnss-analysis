@@ -1,4 +1,4 @@
-function [xHat,z,svPos,H,Wpr,Wrr] = NaivePvt(prs,gpsEph,xo)
+function [xHat,z,svPos,H,Wpr,Wrr,output] = NaivePvt(prs,gpsEph,xo)
 % [xHat,z,svPos,H,Wpr,Wrr] = WlsPvt(prs,gpsEph,xo)
 % calculate a weighted least squares PVT solution, xHat
 % given pseudoranges, pr rates, and initial state
@@ -41,9 +41,6 @@ xyz0 = xo(1:3);
 bc = xo(4);
 bcBtwSys = xo(5);
 
-if numVal<4
-  return
-end
 ttxWeek = prs(:,jWk); %week of tx. Note - we could get a rollover, when ttx_sv
 %goes negative, and it is handled in GpsEph2Pvt, where we work with fct
 ttxSeconds =  prs(:,jSec) - prs(:,jPr)/GpsConstants.LIGHTSPEED; %ttx by sv clock 
@@ -54,7 +51,7 @@ ttxSeconds =  prs(:,jSec) - prs(:,jPr)/GpsConstants.LIGHTSPEED; %ttx by sv clock
 % as done next:
 dtsv = GpsEph2Dtsv(gpsEph,ttxSeconds);
 dtsv = dtsv(:); %make into a column for compatibility with other time vectors
-ttx = ttxSeconds - dtsv; %subtract dtsv from sv time to get true gps time
+ttx = ttxSeconds - dtsv; %subtract dtsv from sv time to get tr0000000000000000000001ue gps time
 
 %calculate satellite position at ttx
 [svXyzTtx,dtsv,svXyzDot,dtsvDot]=GpsEph2Pvt(gpsEph,[ttxWeek,ttx]);
@@ -63,21 +60,22 @@ svXyzTrx = svXyzTtx; %initialize svXyz at time of reception
 %Compute weights ---------------------------------------------------
 Wpr = diag(1./prs(:,jPrSig));
 Wrr = diag(1./prs(:,jPrrSig));
-
+Wpr_vec = 1./(prs(:,jPrSig).*prs(:,jPrSig));
+Wrr_vec = 1./(prs(:,jPrrSig).*prs(:,jPrrSig));
 %iterate on this next part tilL change in pos & line of sight vectors converge
 xHat=zeros(5,1);
 dx=xHat+inf;
 %we expect the while loop to converge in < 10 iterations, even with initial
 %position on other side of the Earth (see Stanford course AA272C "Intro to GPS")
-% for i=1:length([gpsEph.PRN])
-%     % calculate tflight from, bc and dtsv
-%     dtflight = (prs(i,jPr)-bc)/GpsConstants.LIGHTSPEED + dtsv(i);
-%     % Use of bc: bc>0 <=> pr too big <=> tflight too big.
-%     %   i.e. trx = trxu - bc/GpsConstants.LIGHTSPEED
-%     % Use of dtsv: dtsv>0 <=> pr too small <=> tflight too small.
-%     %   i.e ttx = ttxsv - dtsv
-%     svXyzTrx(i,:) = FlightTimeCorrection(svXyzTtx(i,:), dtflight);
-% end
+for i=1:length([gpsEph.PRN])
+    % calculate tflight from, bc and dtsv
+    dtflight = (prs(i,jPr)-bc)/GpsConstants.LIGHTSPEED + dtsv(i);
+    % Use of bc: bc>0 <=> pr too big <=> tflight too big.
+    %   i.e. trx = trxu - bc/GpsConstants.LIGHTSPEED
+    % Use of dtsv: dtsv>0 <=> pr too small <=> tflight too small.
+    %   i.e ttx = ttxsv - dtsv
+    svXyzTrx(i,:) = FlightTimeCorrection(svXyzTtx(i,:), dtflight);
+end
 
 %calculate line of sight vectors and ranges from satellite to xo
 v = xyz0(:)*ones(1,numVal,1) - svXyzTrx';%v(:,i) = vector from sv(i) to xyz0
@@ -98,14 +96,15 @@ H = [v', ones(numVal,1), zeroOneVec]; % H matrix = [unit vector,1]
 
 %z = Hx, premultiply by W: Wz = WHx, and solve for x:
 % dx = pinv(Wpr*H)*Wpr*zPr;
-
-dx = [0,0,0,mean(zPr),0]';
+bcBtwSys = mean(zPr(prs(:,jSv)>100)) - mean(zPr(prs(:,jSv)<100));
+if isnan(bcBtwSys) % single constellation
+    bcBtwSys = 0;
+end
+zPr(prs(:,jSv)>100) = zPr(prs(:,jSv)>100) - bcBtwSys;
+dx = [0,0,0,sum(zPr.*Wpr_vec)/sum(Wpr_vec),bcBtwSys]';
 
 % update xo, xhat and bc
 xHat=xHat+dx;
-xyz0=xyz0(:)+dx(1:3);
-bc=bc+dx(4);
-bcBtwSys = bcBtwSys + dx(5);
 
 %Now calculate the a-posteriori range residual
 zPr = zPr-H*dx;
@@ -120,11 +119,13 @@ prrHat = rrMps + xo(9) - GpsConstants.LIGHTSPEED*dtsvDot;
 zPrr = prs(:,jPrr)-prrHat;
 %z = Hx, premultiply by W: Wz = WHx, and solve for x:
 % vHat = pinv(Wrr*H)*Wrr*zPrr;
-vHat = [0,0,0,mean(zPrr),0]';
+
+vHat = [0,0,0,sum(zPrr.*Wrr_vec/sum(Wrr_vec)),0]';
 xHat = [xHat;vHat]; 
 
-z = [prs(:,jPr)-range(:)+GpsConstants.LIGHTSPEED*dtsv;prs(:,jPrr)-rrMps+GpsConstants.LIGHTSPEED*dtsvDot];
+z = [zPr+bc,zPrr+xo(9)];
 
+output = [prs(:,3),prs(:,5),prs(:,7),z];
 end %end of function WlsPvt
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

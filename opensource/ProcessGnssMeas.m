@@ -1,4 +1,4 @@
-function gnssMeas = ProcessGnssMeas(gnssRaw)
+function gnssMeas = ProcessGnssMeas(gnssRaw,gnssStatus,gnssFix)
 % gnssMeas = ProcessGnssMeas(gnssRaw)
 % Process raw measurements read from ReadGnssLogger
 % Using technique explained in "Raw GNSS Measurements from Android" tutorial
@@ -32,27 +32,39 @@ function gnssMeas = ProcessGnssMeas(gnssRaw)
 %Open Source code for processing Android GNSS Measurements
 
 % Filter valid values first, so that rollover checks, etc, are on valid data
-gnssRaw = FilterValid(gnssRaw);
+gnssRaw = FilterValid(gnssRaw,gnssStatus,gnssFix);
 gnssMeas.Svid       = unique(gnssRaw.Svid)'; %all the sv ids found in gnssRaw
 M = length(gnssMeas.Svid);
 
 %anything within 1ms is considered same epoch:
 allRxMilliseconds = double(gnssRaw.allRxMillis);
 allRxMilliseconds(gnssRaw.ConstellationType==5) = allRxMilliseconds(gnssRaw.ConstellationType==5) - 1356000*GpsConstants.WEEKSEC;
+
+bdsFct = [];
+gpsFct = [];
 if(sum(gnssRaw.ConstellationType==5)~=0)
-    gnssMeas.FctSeconds(:,1) = (unique(allRxMilliseconds(gnssRaw.ConstellationType==5)))*1e-3+1356*GpsConstants.WEEKSEC;
-    gnssMeas.FctSeconds(:,2) = gnssMeas.FctSeconds(:,1)-1356*GpsConstants.WEEKSEC;
+    bdsFct = (unique(allRxMilliseconds(gnssRaw.ConstellationType==5)))*1e-3;
 end
 
 if(sum(gnssRaw.ConstellationType==1)~=0)
-    gnssMeas.FctSeconds(:,1) = (unique(allRxMilliseconds(gnssRaw.ConstellationType==1)))*1e-3;
-    gnssMeas.FctSeconds(:,2) = gnssMeas.FctSeconds(:,1)-1356*GpsConstants.WEEKSEC;
+    gpsFct = (unique(allRxMilliseconds(gnssRaw.ConstellationType==1)))*1e-3;
 end
 
+if(length(gpsFct)==length(bdsFct))
+    gnssMeas.FctSeconds = [gpsFct,bdsFct];
+elseif(isempty(bdsFct))
+    gnssMeas.FctSeconds = [gpsFct,gpsFct-1356*GpsConstants.WEEKSEC];
+elseif(isempty(gpsFct))
+    gnssMeas.FctSeconds = [bdsFct+1356*GpsConstants.WEEKSEC,bdsFct];
+else
+    gnssMeas.FctSeconds = [gpsFct,gpsFct-1356*GpsConstants.WEEKSEC];
+end
 
 N = size(gnssMeas.FctSeconds,1);
 gnssMeas.ClkDCount  = zeros(N,1);
 gnssMeas.HwDscDelS  = zeros(N,1);
+gnssMeas.Fbns = zeros(N,1);
+gnssMeas.ClkDrift = zeros(N,1);
 
 gnssMeas.AzDeg      = zeros(1,M)+NaN;
 gnssMeas.ElDeg      = zeros(1,M)+NaN;
@@ -67,6 +79,7 @@ gnssMeas.AdrM       = zeros(N,M)+NaN;
 gnssMeas.AdrSigmaM  = zeros(N,M)+NaN;
 gnssMeas.AdrState   = zeros(N,M);
 gnssMeas.Cn0DbHz    = zeros(N,M)+NaN;
+% gnssMeas.AgcDb = zeros(N,M)+NaN;
 
 %GPS Week number:
 weekNumber = floor(-double(gnssRaw.FullBiasNanos)*1e-9/GpsConstants.WEEKSEC);
@@ -116,6 +129,7 @@ AdrM        = gnssRaw.AccumulatedDeltaRangeMeters;
 AdrSigmaM   = gnssRaw.AccumulatedDeltaRangeUncertaintyMeters;
 AdrState    = gnssRaw.AccumulatedDeltaRangeState;
 Cn0DbHz     = gnssRaw.Cn0DbHz;
+% AgcDb = gnssRaw.AgcDb;
 
 %Now pack these vectors into the NxM matrices
 for i=1:N %i is index into gnssMeas.FctSeconds and matrix rows
@@ -135,9 +149,12 @@ for i=1:N %i is index into gnssMeas.FctSeconds and matrix rows
         gnssMeas.AdrSigmaM(i,k)  = AdrSigmaM(J(j));
         gnssMeas.AdrState(i,k)   = AdrState(J(j));
         gnssMeas.Cn0DbHz(i,k)    = Cn0DbHz(J(j));
+        % gnssMeas.AgcDb(i,k) = AgcDb(J(j));
     end
     %save the hw clock discontinuity count for this epoch:
     gnssMeas.ClkDCount(i) = gnssRaw.HardwareClockDiscontinuityCount(J(1));
+    gnssMeas.Fbns(i) = gnssRaw.FullBiasNanos(J(1));
+    gnssMeas.ClkDrift(i) = gnssRaw.DriftNanosPerSecond(J(1));
     
     if gnssRaw.HardwareClockDiscontinuityCount(J(1)) ~= ...
             gnssRaw.HardwareClockDiscontinuityCount(J(end))
@@ -150,7 +167,7 @@ gnssMeas = GetDelPr(gnssMeas);
 end %of function ProcessGnssMeas
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function gnssRaw = FilterValid(gnssRaw)
+function gnssRaw = FilterValid(gnssRaw,gnssStatus,gnssFix)
 %utility function for ProcessGnssMeas, 
 %remove fields corresponding to measurements that are invalid
 %NOTE: this makes it simpler to process data. But it removes data,
@@ -163,6 +180,15 @@ iTowUnc = gnssRaw.ReceivedSvTimeUncertaintyNanos > GnssThresholds.MAXTOWUNCNS;
 iPrrUnc = gnssRaw.PseudorangeRateUncertaintyMetersPerSecond > ...
     GnssThresholds.MAXPRRUNCMPS;
 iBad = iTowUnc | iPrrUnc;
+if ~isempty(gnssStatus)
+    iStatusTime = sum(abs(gnssRaw.utcTimeMillis'-gnssStatus.UnixTimeMillis)<1000,1)==0;
+    iEleDeg = ~ismember(gnssRaw.Svid,gnssStatus.Svid);
+    iBad = iBad | iEleDeg | iStatusTime';
+end
+if ~isempty(gnssFix)
+    iFixTime = sum(abs(gnssRaw.utcTimeMillis'-gnssFix.UnixTimeMillis)<1000,1)==0;
+    iBad = iBad | iFixTime';
+end
 
 if any(iBad)
     numBad = sum(iBad);

@@ -69,7 +69,7 @@ dx=xHat+inf;
 whileCount=0; maxWhileCount=100; 
 %we expect the while loop to converge in < 10 iterations, even with initial
 %position on other side of the Earth (see Stanford course AA272C "Intro to GPS")
-while norm(dx(1:4)) > GnssThresholds.MAXDELPOSFORNAVM
+while norm(dx) > GnssThresholds.MAXDELPOSFORNAVM
     whileCount=whileCount+1;
     assert(whileCount < maxWhileCount,...
         'while loop did not converge after %d iterations',whileCount);
@@ -91,13 +91,14 @@ while norm(dx(1:4)) > GnssThresholds.MAXDELPOSFORNAVM
   svPos=[prs(:,3),svXyzTrx,dtsv(:)];
 
   %calculate the a-priori range residual
-  prHat = range(:) + bc -GpsConstants.LIGHTSPEED*dtsv;
+  zeroOneVec = zeros(numVal,1);
+  zeroOneVec(prs(:,jSv)>100) = 1;
+  prHat = range(:) + bc -GpsConstants.LIGHTSPEED*dtsv + bcBtwSys*zeroOneVec;
   % Use of bc: bc>0 <=> pr too big <=> rangehat too big
   % Use of dtsv: dtsv>0 <=> pr too small
     
   zPr = prs(:,jPr)-prHat; 
-  zeroOneVec = zeros(numVal,1);
-  zeroOneVec(prs(:,jSv)>100) = 1;
+
   H = [v', ones(numVal,1), zeroOneVec]; % H matrix = [unit vector,1]
   
   %z = Hx, premultiply by W: Wz = WHx, and solve for x:
@@ -118,14 +119,13 @@ for i=1:numVal
     %range rate = [satellite velocity] dot product [los from xo to sv]
     rrMps(i) = -svXyzDot(i,:)*v(:,i);
 end
-prrHat = rrMps + xo(9) - GpsConstants.LIGHTSPEED*dtsvDot;
+prrHat = rrMps + xo(9) - GpsConstants.LIGHTSPEED*dtsvDot + xo(10)*zeroOneVec;
 zPrr = prs(:,jPrr)-prrHat;
 %z = Hx, premultiply by W: Wz = WHx, and solve for x:
 vHat = pinv(Wrr*H)*Wrr*zPrr;
 xHat = [xHat;vHat]; 
 
 z = [zPr;zPrr];
-
 end %end of function WlsPvt
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

@@ -1,4 +1,4 @@
-function [allGpsEph,allBdsEph] = GetNasaHourlyEphemeris(utcTime,dirName)
+function [allGpsEph,allBdsEph,iono] = GetNasaHourlyEphemeris(utcTime,dirName)
 %[allGpsEph,allGloEph] = GetNasaHourlyEphemeris(utcTime,dirName)
 %Get hourly ephemeris files, 
 % If a GPS ephemeris file is in dirName, with valid ephemeris for at
@@ -49,7 +49,8 @@ dayNumber = DayOfYear(utcTime);
 
 hourlyZFileGps = sprintf('hour%03d0.%02dn.Z',dayNumber,yearNumber2Digit);
 hourlyZFileBds = sprintf('hour%03d0.%02db.Z',dayNumber,yearNumber2Digit);
-
+hourlyDir=sprintf('/gnss/data/hourly/%4d/%03d/',yearNumber4Digit,dayNumber);
+fprintf('Get this file:%s%s \n',hourlyDir,hourlyZFileGps);
 ephFilename = hourlyZFileGps(1:end-2);
 fullEphFilename = [dirName,hourlyZFileGps(1:end-2)]; %full name (with directory specified)
 %check if ephemeris file already exists (e.g. you downloaded it 'by hand')
@@ -60,7 +61,7 @@ if exist(fullEphFilename,'file')==2
     fprintf('Reading GPS ephemeris from ''%s'' file in local directory\n',...
         ephFilename);
     fprintf('%s\n',dirName);
-    allGpsEph = ReadRinexNav(fullEphFilename);
+    [allGpsEph,iono] = ReadRinexNav(fullEphFilename);
     [~,fctSeconds] = Utc2Gps(utcTime);
     ephAge = [allGpsEph.GPS_Week]*GpsConstants.WEEKSEC + [allGpsEph.Toe] - ...
         fctSeconds;
@@ -95,7 +96,6 @@ if exist(fullEphFilename,'file')==2
         bGotBdsEph = true;
     end
 end
-
 
 % if ~bGotGpsEph
 %     %% get ephemeris from Nasa site

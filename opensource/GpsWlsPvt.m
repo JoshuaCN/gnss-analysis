@@ -58,14 +58,13 @@ gpsPvt.hdop            = zeros(N,1)+inf;
 nSvsize = 5;
 zs = zeros(N,2*nSvsize);
 zss = zeros(N,3*nSvsize);
-zcum3 = zeros(N,nSvsize);
 x_est = zeros(nSvsize,3);
 p_est = ones(nSvsize,3,3);
 z_unfilt = zeros(N,nSvsize,3);
 z_filt = zeros(N,nSvsize,3);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 for i=1:N
-    iValid = find(isfinite(gnssMeas.PrM(i,:))); %index into valid svid
+    iValid = find(isfinite(gnssMeas.PrM(i,:)) .* (gnssMeas.PrrSigmaMps(i,:)~=0) .*(gnssMeas.PrSigmaM(i,:)~=0)); %index into valid svid
     svid    = gnssMeas.Svid(iValid)';
     
     [gpsEph,iSv1] = ClosestGpsEph(allGpsEph,svid,gnssMeas.FctSeconds(i,1));
@@ -96,9 +95,7 @@ for i=1:N
     svid = svid(iSv); %svid for which we have ephemeris
     numSvs = length(svid); %number of satellites this epoch
     gpsPvt.numSvs(i) = numSvs;
-    if numSvs<4
-        continue;%skip to next epoch
-    end
+
     
     %% WLS PVT -----------------------------------------------------------------
     %for those svIds with valid ephemeris, pack prs matrix for WlsNav
@@ -115,11 +112,15 @@ for i=1:N
     
     xo(6:8) = zeros(3,1); %initialize speed to zero
     if(bWls)
+        if numSvs<4
+            continue;%skip to next epoch
+        end
         [xHat,~,~,H,Wpr,Wrr] = WlsPvt(prs,allEph,xo);%compute WLS solution
+        % [xHat,~,~,H,Wpr,Wrr] = WlsPvtAltHold(prs,allEph,xo);%compute WLS solution
     else
         xo(1:3) = Lla2Xyz([39.07267446,115.93601082,34.572]);
         xo(1:3) = gnssMeas.outAntXyz(i,:);
-        [xHat,~,~,H,Wpr,Wrr] = NaivePvt(prs,allEph,xo);%compute WLS solution
+        [xHat,~,~,H,Wpr,Wrr,output{i}] = NaivePvt(prs,allEph,xo);%compute WLS solution
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % zss(i,:) = [zs(i,1:nSvsize),zs(i,nSvsize+1:2*nSvsize),zs(i,1:nSvsize)-sum(zs(1:i,nSvsize+1:2*nSvsize),1)];
         % z_unfilt(i,:,:) = reshape(zss(i,:),nSvsize,3);
@@ -150,23 +151,23 @@ for i=1:N
     %     gpsPvt.allWireLength(i) = mean(z(:,3));
     % end
 
-    %compute HDOP
-    H = [H(:,1:3)*RE2N', ones(numSvs,1)]; %observation matrix in NED
-    P = inv(H'*H);%unweighted covariance
-    gpsPvt.hdop(i) = sqrt(P(1,1)+P(2,2));
-    
-    %compute variance of llaDegDegM
-    %inside LsPvt the weights are used like this:
-    %  z = Hx, premultiply by W: Wz = WHx, and solve for x:
-    %  x = pinv(Wpr*H)*Wpr*zPr;
-    %  the point of the weights is to make sigma(Wz) = 1
-    %  therefore, the variances of x come from  diag(inv(H'Wpr'WprH))
-    P = inv(H'*(Wpr'*Wpr)*H); %weighted covariance
-    gpsPvt.sigmaLLaM(i,:) = sqrt(diag(P(1:3,1:3)));
-    
-    %similarly, compute variance of velocity
-    P = inv(H'*(Wrr'*Wrr)*H); %weighted covariance
-    gpsPvt.sigmaVelMps(i,:) = sqrt(diag(P(1:3,1:3)));
+    % %compute HDOP
+    % H = [H(:,1:3)*RE2N', ones(numSvs,1)]; %observation matrix in NED
+    % P = inv(H'*H);%unweighted covariance
+    % gpsPvt.hdop(i) = sqrt(P(1,1)+P(2,2));
+    % 
+    % %compute variance of llaDegDegM
+    % %inside LsPvt the weights are used like this:
+    % %  z = Hx, premultiply by W: Wz = WHx, and solve for x:
+    % %  x = pinv(Wpr*H)*Wpr*zPr;
+    % %  the point of the weights is to make sigma(Wz) = 1
+    % %  therefore, the variances of x come from  diag(inv(H'Wpr'WprH))
+    % P = inv(H'*(Wpr'*Wpr)*H); %weighted covariance
+    % gpsPvt.sigmaLLaM(i,:) = sqrt(diag(P(1:3,1:3)));
+    % 
+    % %similarly, compute variance of velocity
+    % P = inv(H'*(Wrr'*Wrr)*H); %weighted covariance
+    % gpsPvt.sigmaVelMps(i,:) = sqrt(diag(P(1:3,1:3)));
     %%end WLS PVT --------------------------------------------------------------
 end
 

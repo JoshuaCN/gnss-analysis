@@ -1,5 +1,17 @@
 pluginManagement {
     repositories {
+        maven {
+            allowInsecureProtocol = true
+            url 'http://maven.aliyun.com/repository/google'
+        }
+        maven {
+            allowInsecureProtocol = true
+            url 'http://maven.aliyun.com/repository/jcenter'
+        }
+        maven {
+            allowInsecureProtocol = true
+            url 'http://maven.aliyun.com/nexus/content/groups/public'
+        }
         gradlePluginPortal()
         google()
         mavenCentral()

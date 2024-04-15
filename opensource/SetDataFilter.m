@@ -15,7 +15,11 @@ dataFilter{1,2}   = 'FullBiasNanos ~= 0';
 %you can create other filters in the same way ...
 %for example, suppose you want to remove Svid 23:
 % dataFilter{end+1,1} = 'Svid'; 
-% dataFilter{end,2}   = 'Svid ~= 23';
+% dataFilter{end,2}   = 'Svid ~= 7';
+% dataFilter{end+1,1} = 'Svid'; 
+% dataFilter{end,2}   = 'Svid ~= 24';
+% dataFilter{end+1,1} = 'Svid'; 
+% dataFilter{end,2}   = 'Svid ~= 11';
 % 
 %or suppose you want to keep only Svid 2,5,10, & 17
 % dataFilter{end,2} = 'Svid==2 | Svid==5 | Svid==10 | Svid==17';
@@ -29,14 +33,18 @@ dataFilter{1,2}   = 'FullBiasNanos ~= 0';
 
 %keep only Svid 2
 % dataFilter{end+1,1} = 'Svid'; 
-% dataFilter{end,2}   = 'ismember(Svid,[10    12    15    23   32])';
+% dataFilter{end,2}   = 'ismember(Svid,[4,7,8,9,16,18,26,27])';
+% dataFilter{end,2}   = 'ismember(Svid,[5,18,23,24])';
 
 %limit to GPS only:
 dataFilter{end+1,1} = 'ConstellationType'; 
 dataFilter{end,2}   = 'ismember(ConstellationType,[1])'; 
 
 dataFilter{end+1,1} = 'Cn0DbHz'; 
-dataFilter{end,2}   = 'Cn0DbHz>20'; 
+dataFilter{end,2}   = 'Cn0DbHz>10'; 
+
+dataFilter{end+1,1} = 'CarrierFrequencyHz'; 
+dataFilter{end,2}   = 'CarrierFrequencyHz>1.5e9'; 
 
 %ConstellationType values are defined in Android HAL Documentation, gps.h, 
 %   typedef uint8_t                         GnssConstellationType;
